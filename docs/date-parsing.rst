@@ -176,3 +176,83 @@ dictionary.
     If you write a new date handler, you are encouraged (but not required) to
     `submit a patch <http://sourceforge.net/projects/feedparser/>`_ so it can be
     integrated into the next version of :program:`Universal Feed Parser`.
+
+
+.. _advanced.date.date_details:
+
+Date details
+------------
+
+Parsed dates normalize every value to a UTC 9-tuple, which loses the
+difference between a timezone the feed explicitly stated and a timezone the
+parser assumed. Pass ``date_details=True`` to :func:`feedparser.parse` (or set
+:data:`feedparser.DATE_DETAILS`) to keep a provenance record next to every
+parsed date. The original date element and the ``*_parsed`` tuple are always
+populated exactly as before; the detail record is additive.
+
+Each parsed date gains a sibling ``*_date_detail`` dictionary. For example
+``published_parsed`` is accompanied by ``published_date_detail``, and the same
+applies to the ``updated``, ``created``, ``expired``, ``validity_start`` and
+``validity_end`` dates. The record contains:
+
+===================== ========================================================
+Key                   Meaning
+===================== ========================================================
+``value``             The original date string, unchanged.
+``handler``           The name of the date handler that parsed the value
+                      (``"rfc822"``, ``"w3dtf"``, a registered custom handler,
+                      or ``"unknown"`` if no handler succeeded).
+``precision``         The granularity expressed in the source string:
+                      ``"day"``, ``"minute"`` or ``"second"``. Defaulted
+                      hours, minutes or seconds are never counted.
+``timezone_explicit`` ``True`` when the source carries timezone information,
+                      ``False`` when it does not, or ``"unknown"`` when the
+                      information cannot be attributed reliably.
+``timezone_offset``   The source timezone offset from UTC in minutes
+                      (for example ``-480`` for ``-08:00``), or ``"unknown"``
+                      when no offset was given.
+===================== ========================================================
+
+Values that cannot be determined reliably are the string ``"unknown"``. In
+particular, feedparser never reconstructs source information from the
+zero-valued fields of the parsed 9-tuple: a date-only string that is parsed as
+midnight UTC still reports ``precision == "day"``,
+``timezone_explicit is False`` and ``timezone_offset == "unknown"``.
+
+A date that no handler can parse keeps its detail record with ``handler``,
+``precision``, ``timezone_explicit`` and ``timezone_offset`` all set to
+``"unknown"``; the matching ``*_parsed`` value is ``None``.
+
+Examples
+~~~~~~~~
+
+================================================ =====================================
+Source string                                    Detail highlights
+================================================ =====================================
+``01 Jan 2004 19:48:21`` (RFC 822, no timezone)  ``timezone_explicit`` is ``False`` and
+                                                 ``timezone_offset`` is ``"unknown"`` even
+                                                 though the tuple is normalized to UTC.
+``01 Jan 2004`` (date only)                      ``precision`` is ``"day"``; the midnight
+                                                 time and UTC offset are parser defaults.
+``2003-12-31T10:14:55+05:30`` (W3CDTF)           ``timezone_offset`` is ``330``; offsets
+                                                 need not be whole hours.
+``not a date`` (illegal)                         Every field except ``value`` is
+                                                 ``"unknown"`` and ``*_parsed`` is ``None``.
+================================================ =====================================
+
+Custom date handlers
+~~~~~~~~~~~~~~~~~~~~
+
+Detail-aware handlers return a
+:class:`feedparser.datetimes.types.DateParseResult` instead of a bare
+9-tuple. It wraps the UTC :class:`time.struct_time` and a
+:class:`feedparser.datetimes.types.DateDetail` describing the source value.
+Handlers that keep returning a plain 9-tuple remain fully supported: the value
+is still parsed, but the detail record can only report the handler name and
+original value, so ``precision``, ``timezone_explicit`` and
+``timezone_offset`` are ``"unknown"``.
+
+The handler chain is invoked exactly once per date string. Detail records are
+built from the single handler call that already produced the parsed tuple, so a
+handler with side effects is never executed a second time to generate the
+extra information.

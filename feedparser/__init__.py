@@ -49,6 +49,11 @@ SANITIZE_HTML = 1
 # (uses less memory), set this to 1.
 OPTIMISTIC_ENCODING_DETECTION = 1
 
+# If you want feedparser to include provenance details alongside parsed dates
+# (original value, handler name, precision, explicit timezone and raw offset),
+# set this to 1. The *_parsed fields are always populated regardless.
+DATE_DETAILS = 0
+
 
 __all__ = (
     "parse",

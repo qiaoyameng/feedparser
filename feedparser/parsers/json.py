@@ -27,7 +27,8 @@
 
 import json
 
-from ..datetimes import _parse_date
+from ..datetimes import _parse_date_with_details
+from ..datetimes.types import make_failure_detail
 from ..sanitizer import sanitize_html
 from ..util import FeedParserDict
 
@@ -55,6 +56,7 @@ class JSONParser:
         self.baseuri = baseuri or ""
         self.lang = baselang or None
         self.encoding = encoding or "utf-8"  # character encoding
+        self.date_details = False
 
         self.version = None
         self.feeddata = FeedParserDict()
@@ -98,10 +100,10 @@ class JSONParser:
 
         if "date_published" in e:
             entry["published"] = e["date_published"]
-            entry["published_parsed"] = _parse_date(e["date_published"])
+            self._save_entry_date(entry, "published", e["date_published"])
         if "date_updated" in e:
             entry["updated"] = e["date_modified"]
-            entry["updated_parsed"] = _parse_date(e["date_modified"])
+            self._save_entry_date(entry, "updated", e["date_modified"])
 
         if "tags" in e:
             entry["category"] = e["tags"]
@@ -113,6 +115,24 @@ class JSONParser:
             entry["enclosures"] = [self.parse_attachment(a) for a in e["attachments"]]
 
         return entry
+
+    def _save_entry_date(self, entry, field, value):
+        """Populate ``*_parsed`` and, when enabled, ``*_date_detail``.
+
+        Mirrors :meth:`XMLParserMixin._save_date` so JSON Feed and XML feed
+        dates expose identical detail records. The handler chain is walked
+        once for both fields.
+        """
+
+        result = _parse_date_with_details(value)
+        entry[f"{field}_parsed"] = None if result is None else result.parsed
+        if self.date_details:
+            detail = (
+                result.detail
+                if result is not None
+                else make_failure_detail(value)
+            )
+            entry[f"{field}_date_detail"] = detail.as_dict()
 
     @staticmethod
     def parse_author(parent, dest):

@@ -27,6 +27,8 @@
 
 import datetime
 
+from .types import UNKNOWN, DateDetail, DateParseResult
+
 timezonenames = {
     "ut": 0,
     "gmt": 0,
@@ -58,9 +60,15 @@ timezonenames = {
 # (basically, allow a space as a date/time/timezone separator)
 
 
-def _parse_date_w3dtf(datestr):
+def _parse_date_w3dtf_detail(datestr):
+    """Parse W3CDTF dates, returning both the UTC tuple and provenance."""
+
     if not datestr.strip():
         return None
+
+    # Track which components are actually present in the source string.
+    lower = datestr.lower()
+    time_explicit = "t" in lower
     parts = datestr.lower().split("t")
     if len(parts) == 1:
         # This may be a date only, or may be an MSSQL-style date
@@ -68,8 +76,15 @@ def _parse_date_w3dtf(datestr):
         if len(parts) == 1:
             # Treat this as a date only
             parts.append("00:00:00z")
+            synthesized_timezone = True
+        else:
+            # MSSQL-style dates use a space as the date/time separator.
+            time_explicit = True
+            synthesized_timezone = False
     elif len(parts) > 2:
         return None
+    else:
+        synthesized_timezone = False
     date = parts[0].split("-", 2)
     if not date or len(date[0]) != 4:
         return None
@@ -95,6 +110,7 @@ def _parse_date_w3dtf(datestr):
     parts.append(parts[1][loc:])
     parts[1] = parts[1][:loc]
     time = parts[1].split(":", 2)
+    source_time_component_count = len(time)
     # Ensure that time has 3 elements. Using '0' means that the
     # minutes and seconds, if missing, will default to 0.
     time.extend(["0"] * (3 - len(time)))
@@ -107,13 +123,31 @@ def _parse_date_w3dtf(datestr):
         if parts[2].startswith("-"):
             tzhour = tzhour * -1
             tzmin = tzmin * -1
+        timezone_explicit = True
     else:
-        tzhour = timezonenames.get(parts[2], 0)
+        if not synthesized_timezone and parts[2] in timezonenames:
+            tzhour = timezonenames[parts[2]]
+            timezone_explicit = True
+        else:
+            tzhour = 0
+            timezone_explicit = False
         tzmin = 0
+    timezone_offset = tzhour * 60 + tzmin if timezone_explicit else UNKNOWN
     try:
         hour, minute, second = (int(float(i)) for i in time)
     except ValueError:
         return None
+
+    # Precision is determined by the source string only: a date with no time
+    # component is day precision; the number of colons in the time component
+    # distinguishes minute from second precision.
+    if not time_explicit:
+        precision = "day"
+    elif source_time_component_count < 3:
+        precision = "minute"
+    else:
+        precision = "second"
+
     # Create the datetime object and timezone delta objects
     try:
         stamp = datetime.datetime(year, month, day, hour, minute, second)
@@ -122,7 +156,22 @@ def _parse_date_w3dtf(datestr):
     delta = datetime.timedelta(0, 0, 0, 0, tzmin, tzhour)
     # Return the date and timestamp in a UTC 9-tuple
     try:
-        return (stamp - delta).utctimetuple()
+        parsed = (stamp - delta).utctimetuple()
     except (OverflowError, ValueError):
         # IronPython throws ValueErrors instead of OverflowErrors
         return None
+    detail = DateDetail(
+        value=datestr,
+        handler="w3dtf",
+        precision=precision,
+        timezone_explicit=timezone_explicit,
+        timezone_offset=timezone_offset,
+    )
+    return DateParseResult(parsed=parsed, detail=detail)
+
+
+def _parse_date_w3dtf(datestr):
+    result = _parse_date_w3dtf_detail(datestr)
+    if result is None:
+        return None
+    return result.parsed

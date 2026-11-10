@@ -27,7 +27,10 @@
 
 import re
 
-from .rfc822 import _parse_date_rfc822
+from dataclasses import replace
+
+from .rfc822 import _parse_date_rfc822_detail
+from .types import DateParseResult
 
 # Unicode strings for Greek date strings
 _greek_months = {
@@ -67,7 +70,7 @@ _greek_date_format_re = re.compile(
 )
 
 
-def _parse_date_greek(date_string):
+def _parse_date_greek_detail(date_string):
     """Parse a string according to a Greek 8-bit date format."""
     m = _greek_date_format_re.match(date_string)
     if not m:
@@ -87,4 +90,19 @@ def _parse_date_greek(date_string):
             "offset": m.group(8),
         }
     )
-    return _parse_date_rfc822(rfc822date)
+    result = _parse_date_rfc822_detail(rfc822date)
+    if result is None:
+        return None
+    return DateParseResult(
+        parsed=result.parsed,
+        detail=replace(result.detail, value=date_string, handler="greek"),
+    )
+
+
+def _parse_date_greek(date_string):
+    """Parse a string according to a Greek 8-bit date format."""
+
+    result = _parse_date_greek_detail(date_string)
+    if result is None:
+        return None
+    return result.parsed

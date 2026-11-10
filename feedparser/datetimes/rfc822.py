@@ -27,6 +27,8 @@
 
 import datetime
 
+from .types import UNKNOWN, DateDetail, DateParseResult
+
 timezone_names = {
     "ut": 0,
     "gmt": 0,
@@ -70,22 +72,20 @@ months = {
 }
 
 
-def _parse_date_rfc822(date):
-    """Parse RFC 822 dates and times
-    http://tools.ietf.org/html/rfc822#section-5
+def _parse_date_rfc822_detail(date):
+    """Parse RFC 822 dates, returning both the UTC tuple and provenance.
 
-    There are some formatting differences that are accounted for:
-    1. Years may be two or four digits.
-    2. The month and day can be swapped.
-    3. Additional timezone names are supported.
-    4. A default time and timezone are assumed if only a date is present.
-
-    :param str date: a date/time string that will be converted to a time tuple
-    :returns: a UTC time tuple, or None
-    :rtype: time.struct_time | None
+    See :func:`_parse_date_rfc822` for the accepted syntax. The returned
+    :class:`DateParseResult` records which fields the source string actually
+    supplied, so defaulted time and timezone components stay distinguishable
+    from explicitly stated ones.
     """
 
+    # Record what the original string contains before any defaults are added.
     parts = date.lower().split()
+    timezone_explicit = len(parts) >= 5
+    time_explicit = len(parts) >= 4
+
     if len(parts) < 5:
         # Assume that the time and timezone are missing
         parts.extend(("00:00:00", "0000"))
@@ -136,6 +136,12 @@ def _parse_date_rfc822(date):
         hour, minute, second = (int(i) for i in time_parts)
     except ValueError:
         return None
+    if time_explicit:
+        # ``hh`` alone is minute precision; ``hh:mm`` is minute precision;
+        # ``hh:mm:ss`` is second precision.
+        precision = "second" if len(parts[3].split(":")) == 3 else "minute"
+    else:
+        precision = "day"
 
     # Handle the timezone information, if any (default to +0000).
     # Strip 'Etc/' from the timezone.
@@ -161,8 +167,19 @@ def _parse_date_rfc822(date):
             timezone_hours *= -1
             timezone_minutes *= -1
     else:
-        timezone_hours = timezone_names.get(parts[4], 0)
+        # A name that is not in the mapping is not an explicit, interpretable
+        # timezone; the historical behavior falls back to UTC, but the detail
+        # must not claim an offset was provided.
+        if parts[4] in timezone_names:
+            timezone_hours = timezone_names[parts[4]]
+        else:
+            timezone_hours = 0
+            timezone_explicit = False
         timezone_minutes = 0
+
+    timezone_offset = (
+        timezone_hours * 60 + timezone_minutes if timezone_explicit else UNKNOWN
+    )
 
     # Create the datetime object and timezone delta objects
     try:
@@ -173,7 +190,36 @@ def _parse_date_rfc822(date):
 
     # Return the date and timestamp in a UTC 9-tuple
     try:
-        return (stamp - delta).utctimetuple()
+        parsed = (stamp - delta).utctimetuple()
     except (OverflowError, ValueError):
         # IronPython throws ValueErrors instead of OverflowErrors
         return None
+    detail = DateDetail(
+        value=date,
+        handler="rfc822",
+        precision=precision,
+        timezone_explicit=timezone_explicit,
+        timezone_offset=timezone_offset,
+    )
+    return DateParseResult(parsed=parsed, detail=detail)
+
+
+def _parse_date_rfc822(date):
+    """Parse RFC 822 dates and times
+    http://tools.ietf.org/html/rfc822#section-5
+
+    There are some formatting differences that are accounted for:
+    1. Years may be two or four digits.
+    2. The month and day can be swapped.
+    3. Additional timezone names are supported.
+    4. A default time and timezone are assumed if only a date is present.
+
+    :param str date: a date/time string that will be converted to a time tuple
+    :returns: a UTC time tuple, or None
+    :rtype: time.struct_time | None
+    """
+
+    result = _parse_date_rfc822_detail(date)
+    if result is None:
+        return None
+    return result.parsed

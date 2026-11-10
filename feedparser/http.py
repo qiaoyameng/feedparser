@@ -31,7 +31,8 @@ import typing
 
 import requests
 
-from .datetimes import _parse_date
+from .datetimes import _parse_date_with_details
+from .datetimes.types import make_failure_detail
 
 # HTTP "Accept" header to send to servers when downloading feeds.
 ACCEPT_HEADER: str = (
@@ -46,7 +47,11 @@ ACCEPT_HEADER: str = (
 )
 
 
-def get(url: str, result: dict[str, typing.Any]) -> bytes:
+def get(
+    url: str,
+    result: dict[str, typing.Any],
+    date_details: bool = False,
+) -> bytes:
     try:
         response = requests.get(
             url,
@@ -68,7 +73,17 @@ def get(url: str, result: dict[str, typing.Any]) -> bytes:
         modified = result["headers"]["last-modified"]
         if modified:
             result["modified"] = modified
-            result["modified_parsed"] = _parse_date(modified)
+            parsed = _parse_date_with_details(modified)
+            result["modified_parsed"] = (
+                None if parsed is None else parsed.parsed
+            )
+            if date_details:
+                detail = (
+                    parsed.detail
+                    if parsed is not None
+                    else make_failure_detail(modified)
+                )
+                result["modified_date_detail"] = detail.as_dict()
     result["href"] = response.url
     result["status"] = response.status_code
     return response.content

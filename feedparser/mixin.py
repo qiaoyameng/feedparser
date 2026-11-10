@@ -32,6 +32,8 @@ import html.entities
 import re
 import xml.sax.saxutils
 
+from .datetimes import _parse_date_with_details
+from .datetimes.types import make_failure_detail
 from .html import _cp1252
 from .namespaces import _base, cc, dc, georss, itunes, mediarss, psc
 from .sanitizer import HTMLSanitizer, sanitize_html
@@ -179,6 +181,9 @@ class XMLParserMixin(
         self.namespaces_in_use = {}  # dictionary of namespaces defined by the feed
         self.resolve_relative_uris = False
         self.sanitize_html = False
+        # When True, every parsed date is accompanied by a ``*_date_detail``
+        # record with the source value and the parser's provenance data.
+        self.date_details = False
 
         # the following are used internally to track state;
         # this is really out of control and should be refactored
@@ -753,6 +758,27 @@ class XMLParserMixin(
             context[key] = value
         else:
             context.setdefault(key, value)
+
+    def _save_date(self, key, value, overwrite=False):
+        """Parse a date and store both the UTC tuple and optional details.
+
+        ``key`` names the ``*_parsed`` field (for example
+        ``"published_parsed"``). The matching ``*_date_detail`` field is only
+        written when date details are enabled. The handler chain is invoked
+        exactly once regardless of how many fields are populated.
+        """
+
+        result = _parse_date_with_details(value)
+        parsed = None if result is None else result.parsed
+        self._save(key, parsed, overwrite=overwrite)
+        if self.date_details:
+            detail_key = key.removesuffix("_parsed") + "_date_detail"
+            detail = (
+                result.detail
+                if result is not None
+                else make_failure_detail(value)
+            )
+            self._save(detail_key, detail.as_dict(), overwrite=overwrite)
 
     def _get_context(self):
         if self.insource:

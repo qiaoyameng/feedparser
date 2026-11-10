@@ -25,7 +25,10 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from .rfc822 import _parse_date_rfc822
+from dataclasses import replace
+
+from .rfc822 import _parse_date_rfc822_detail
+from .types import UNKNOWN, DateParseResult
 
 _months = [
     "jan",
@@ -43,7 +46,7 @@ _months = [
 ]
 
 
-def _parse_date_asctime(dt):
+def _parse_date_asctime_detail(dt):
     """Parse asctime-style dates.
 
     Converts asctime to RFC822-compatible dates and uses the RFC822 parser
@@ -58,6 +61,7 @@ def _parse_date_asctime(dt):
     parts = dt.split()
 
     # Insert a GMT timezone, if needed.
+    timezone_was_inserted = len(parts) == 5
     if len(parts) == 5:
         parts.insert(4, "+0000")
 
@@ -66,7 +70,7 @@ def _parse_date_asctime(dt):
         return None
 
     # Reassemble the parts in an RFC822-compatible order and parse them.
-    return _parse_date_rfc822(
+    result = _parse_date_rfc822_detail(
         " ".join(
             [
                 parts[0],
@@ -78,3 +82,27 @@ def _parse_date_asctime(dt):
             ]
         )
     )
+    if result is None:
+        return None
+    if timezone_was_inserted:
+        # The ``+0000`` offset was synthesized; the source carried no
+        # timezone, so none must be reported as explicit.
+        detail = replace(
+            result.detail,
+            value=dt,
+            handler="asctime",
+            timezone_explicit=False,
+            timezone_offset=UNKNOWN,
+        )
+    else:
+        detail = replace(result.detail, value=dt, handler="asctime")
+    return DateParseResult(parsed=result.parsed, detail=detail)
+
+
+def _parse_date_asctime(dt):
+    """Parse asctime-style dates into a UTC 9-tuple."""
+
+    result = _parse_date_asctime_detail(dt)
+    if result is None:
+        return None
+    return result.parsed

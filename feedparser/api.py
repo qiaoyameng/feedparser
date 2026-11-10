@@ -74,6 +74,7 @@ SUPPORTED_VERSIONS = {
 def _open_resource(
     url_file_stream_or_string,
     result,
+    date_details: bool = False,
 ):
     """URL, filename, or string --> stream
 
@@ -114,7 +115,7 @@ def _open_resource(
         "https",
     )
     if looks_like_url:
-        data = http.get(url_file_stream_or_string, result)
+        data = http.get(url_file_stream_or_string, result, date_details)
         return io.BytesIO(data)
 
     # try to open with native open function (if url_file_stream_or_string is a filename)
@@ -154,6 +155,7 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    date_details: bool | None = None,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +190,14 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param date_details:
+        Should feedparser attach a ``*_date_detail`` record (for example
+        ``published_date_detail``) next to every parsed date, describing the
+        original value, the handler that parsed it, the precision actually
+        expressed in the source, and whether a timezone (and which offset)
+        was explicitly provided? Values that cannot be determined reliably are
+        reported as ``"unknown"``. Defaults to the value of
+        :data:`feedparser.DATE_DETAILS`, which is ``False``.
 
     """
 
@@ -197,11 +207,17 @@ def parse(
         feed=FeedParserDict(),
         headers={},
     )
+    if date_details is None:
+        # Avoid a cyclic import.
+        import feedparser
+
+        date_details = bool(feedparser.DATE_DETAILS)
 
     try:
         file = _open_resource(
             url_file_stream_or_string,
             result,
+            date_details,
         )
     except urllib.error.URLError as error:
         result.update(
@@ -230,6 +246,7 @@ def parse(
             resolve_relative_uris=resolve_relative_uris,
             sanitize_html=sanitize_html,
             optimistic_encoding_detection=optimistic_encoding_detection,
+            date_details=date_details,
         )
     finally:
         if not hasattr(url_file_stream_or_string, "read"):
@@ -246,6 +263,7 @@ def _parse_file_inplace(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    date_details: bool | None = None,
 ) -> None:
     # Avoid a cyclic import.
     import feedparser
@@ -256,6 +274,8 @@ def _parse_file_inplace(
         resolve_relative_uris = bool(feedparser.RESOLVE_RELATIVE_URIS)
     if optimistic_encoding_detection is None:
         optimistic_encoding_detection = bool(feedparser.OPTIMISTIC_ENCODING_DETECTION)
+    if date_details is None:
+        date_details = bool(feedparser.DATE_DETAILS)
 
     stream_factory = convert_file_to_utf8(
         result["headers"], file, result, optimistic_encoding_detection
@@ -305,6 +325,7 @@ def _parse_file_inplace(
         feed_parser = StrictFeedParser(baseuri, baselang, "utf-8")
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.date_details = date_details
         saxparser = xml.sax.make_parser(PREFERRED_XML_PARSERS)
         saxparser.setFeature(xml.sax.handler.feature_namespaces, 1)
         try:
@@ -336,6 +357,7 @@ def _parse_file_inplace(
         feed_parser = LooseFeedParser(baseuri, baselang, "utf-8", entities)
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.date_details = date_details
 
         # If an encoding was detected, use it; otherwise, assume utf-8 and do your best.
         # Will raise io.UnsupportedOperation if the underlying file is not seekable.
@@ -361,6 +383,7 @@ def _parse_file_inplace(
     if use_json_parser:
         result["version"] = None
         feed_parser = JSONParser(baseuri, baselang, "utf-8")
+        feed_parser.date_details = date_details
         try:
             feed_parser.feed(stream_factory.get_file())
         except Exception as e:

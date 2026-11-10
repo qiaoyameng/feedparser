@@ -27,7 +27,10 @@
 
 import re
 
-from .w3dtf import _parse_date_w3dtf
+from dataclasses import replace
+
+from .types import DateParseResult
+from .w3dtf import _parse_date_w3dtf_detail
 
 # Unicode strings for Hungarian date strings
 _hungarian_months = {
@@ -50,7 +53,7 @@ _hungarian_date_format_re = re.compile(
 )
 
 
-def _parse_date_hungarian(date_string):
+def _parse_date_hungarian_detail(date_string):
     """Parse a string according to a Hungarian 8-bit date format."""
     m = _hungarian_date_format_re.match(date_string)
     if not m or m.group(2) not in _hungarian_months:
@@ -63,4 +66,19 @@ def _parse_date_hungarian(date_string):
     if len(hour) == 1:
         hour = "0" + hour
     w3dtfdate = f"{m.group(1)}-{month}-{day}T{hour}:{m.group(5)}{m.group(6)}"
-    return _parse_date_w3dtf(w3dtfdate)
+    result = _parse_date_w3dtf_detail(w3dtfdate)
+    if result is None:
+        return None
+    return DateParseResult(
+        parsed=result.parsed,
+        detail=replace(result.detail, value=date_string, handler="hungarian"),
+    )
+
+
+def _parse_date_hungarian(date_string):
+    """Parse a string according to a Hungarian 8-bit date format."""
+
+    result = _parse_date_hungarian_detail(date_string)
+    if result is None:
+        return None
+    return result.parsed

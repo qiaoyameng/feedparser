@@ -27,7 +27,10 @@
 
 import re
 
-from .w3dtf import _parse_date_w3dtf
+from dataclasses import replace
+
+from .types import DateParseResult
+from .w3dtf import _parse_date_w3dtf_detail
 
 # 8-bit date handling routines written by ytrewq1.
 _korean_year = "\ub144"  # b3e2 in euc-kr
@@ -47,7 +50,7 @@ _korean_nate_date_re = re.compile(
 )
 
 
-def _parse_date_onblog(dateString):
+def _parse_date_onblog_detail(dateString):
     """Parse a string according to the OnBlog 8-bit date format"""
     m = _korean_onblog_date_re.match(dateString)
     if not m:
@@ -64,10 +67,25 @@ def _parse_date_onblog(dateString):
             "zonediff": "+09:00",
         }
     )
-    return _parse_date_w3dtf(w3dtfdate)
+    result = _parse_date_w3dtf_detail(w3dtfdate)
+    if result is None:
+        return None
+    return DateParseResult(
+        parsed=result.parsed,
+        detail=replace(result.detail, value=dateString, handler="onblog"),
+    )
 
 
-def _parse_date_nate(dateString):
+def _parse_date_onblog(dateString):
+    """Parse a string according to the OnBlog 8-bit date format"""
+
+    result = _parse_date_onblog_detail(dateString)
+    if result is None:
+        return None
+    return result.parsed
+
+
+def _parse_date_nate_detail(dateString):
     """Parse a string according to the Nate 8-bit date format"""
     m = _korean_nate_date_re.match(dateString)
     if not m:
@@ -91,4 +109,19 @@ def _parse_date_nate(dateString):
             "zonediff": "+09:00",
         }
     )
-    return _parse_date_w3dtf(w3dtfdate)
+    result = _parse_date_w3dtf_detail(w3dtfdate)
+    if result is None:
+        return None
+    return DateParseResult(
+        parsed=result.parsed,
+        detail=replace(result.detail, value=dateString, handler="nate"),
+    )
+
+
+def _parse_date_nate(dateString):
+    """Parse a string according to the Nate 8-bit date format"""
+
+    result = _parse_date_nate_detail(dateString)
+    if result is None:
+        return None
+    return result.parsed

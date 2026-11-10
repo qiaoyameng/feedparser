@@ -26,7 +26,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-from ..datetimes import _parse_date
 from ..util import FeedParserDict
 
 
@@ -117,13 +116,13 @@ class Namespace:
                 key, value = validity_detail.split("=", 1)
                 if key == "start":
                     self._save("validity_start", value, overwrite=True)
-                    self._save(
-                        "validity_start_parsed", _parse_date(value), overwrite=True
+                    self._save_date(
+                        "validity_start_parsed", value, overwrite=True
                     )
                 elif key == "end":
                     self._save("validity_end", value, overwrite=True)
-                    self._save(
-                        "validity_end_parsed", _parse_date(value), overwrite=True
+                    self._save_date(
+                        "validity_end_parsed", value, overwrite=True
                     )
 
     def _start_dc_contributor(self, attrs_d):

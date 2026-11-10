@@ -29,8 +29,10 @@ import email.utils
 import re
 import time
 
+from .types import UNKNOWN, DateDetail, DateParseResult
 
-def _parse_date_perforce(date_string):
+
+def _parse_date_perforce_detail(date_string):
     """parse a date in yyyy/mm/dd hh:mm:ss TTT format"""
     # Fri, 2006/09/15 08:19:53 EDT
     _my_date_pattern = re.compile(
@@ -60,4 +62,32 @@ def _parse_date_perforce(date_string):
     )
     tm = email.utils.parsedate_tz(new_date_string)
     if tm:
-        return time.gmtime(email.utils.mktime_tz(tm))
+        parsed = time.gmtime(email.utils.mktime_tz(tm))
+        # ``parsedate_tz`` returns the offset as a tenth element when the
+        # source carries a recognizable timezone; an unrecognized name
+        # carries no reliable offset.
+        offset = tm[9] if len(tm) > 9 else None
+        if offset is not None:
+            timezone_explicit = True
+            timezone_offset = offset
+        else:
+            timezone_explicit = False
+            timezone_offset = UNKNOWN
+        detail = DateDetail(
+            value=date_string,
+            handler="perforce",
+            precision="second",
+            timezone_explicit=timezone_explicit,
+            timezone_offset=timezone_offset,
+        )
+        return DateParseResult(parsed=parsed, detail=detail)
+    return None
+
+
+def _parse_date_perforce(date_string):
+    """parse a date in yyyy/mm/dd hh:mm:ss TTT format"""
+
+    result = _parse_date_perforce_detail(date_string)
+    if result is None:
+        return None
+    return result.parsed
