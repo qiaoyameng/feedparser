@@ -33,7 +33,7 @@ import re
 import xml.sax.saxutils
 
 from .html import _cp1252
-from .namespaces import _base, cc, dc, georss, itunes, mediarss, psc
+from .namespaces import _base, cc, dc, georss, itunes, mediarss, psc, rss1
 from .sanitizer import HTMLSanitizer, sanitize_html
 from .urls import _urljoin, make_safe_absolute_uri, resolve_relative_uris
 from .util import FeedParserDict
@@ -46,6 +46,7 @@ email_pattern = re.compile(
 
 
 class XMLParserMixin(
+    rss1.Namespace,
     _base.Namespace,
     cc.Namespace,
     dc.Namespace,
@@ -200,6 +201,16 @@ class XMLParserMixin(
         self.elementstack = []
         self.basestack = []
         self.langstack = []
+        # RSS 1.0 sequence-mode state.  Sequence mode is opt-in via
+        # feedparser.parse(..., rss1_sequence=True); when disabled every
+        # RSS 1.0 sequence handler returns early and this state is unused.
+        self.rss1_sequence = False
+        self.rss1_channels = []
+        self.rss1_current_channel = None
+        self.rss1_seq_depth = 0
+        self.rss1_items_by_uri = {}
+        self.rss1_unsequenced = []
+        self.rss1_diagnostics = []
         self.svgOK = 0
         self.title_depth = -1
         self.depth = 0

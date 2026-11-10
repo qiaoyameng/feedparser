@@ -49,6 +49,12 @@ SANITIZE_HTML = 1
 # (uses less memory), set this to 1.
 OPTIMISTIC_ENCODING_DETECTION = 1
 
+# If you want RSS 1.0 (RDF) feeds to be assembled according to each
+# channel's rdf:Seq rather than the document order of item elements,
+# set this to 1.  The default of 0 preserves the historical flat
+# document-order entries behavior.
+RSS1_SEQUENCE = 0
+
 
 __all__ = (
     "parse",

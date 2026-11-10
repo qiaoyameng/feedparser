@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+Exercises every RSS 1.0 sequence diagnostic: an unresolvable reference,
+an rdf:li without an rdf:resource, a repeated member in one sequence,
+and two item definitions that share an rdf:about but disagree in content.
+-->
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns="http://purl.org/rss/1.0/"
+    xml:base="http://example.org/feed/">
+
+  <channel rdf:about="http://example.org/channel">
+    <title>Channel</title>
+    <items>
+      <rdf:Seq>
+        <rdf:li resource="items/one"/>
+        <rdf:li resource="items/missing"/>
+        <rdf:li resource="items/one"/>
+        <rdf:li/>
+      </rdf:Seq>
+    </items>
+  </channel>
+
+  <item rdf:about="items/one"><title>One</title></item>
+  <item rdf:about="items/one"><title>One, redefined differently</title></item>
+</rdf:RDF>

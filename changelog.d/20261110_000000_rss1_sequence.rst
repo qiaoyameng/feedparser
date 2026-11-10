@@ -1,0 +1,13 @@
+Added
+-----
+
+*   Add an opt-in RSS 1.0 sequence mode.
+    Pass ``rss1_sequence=True`` to :func:`feedparser.parse`
+    to assemble entries according to each channel's ``rdf:Seq``
+    instead of the document order of the ``item`` elements.
+    The mode resolves ``rdf:about`` and ``rdf:resource`` against the
+    in-scope ``xml:base``, supports forward references and items shared
+    by multiple channels, reports missing references, repeated members
+    and conflicting item definitions as locatable diagnostics,
+    and keeps items outside every sequence separate.
+    The default flat, document-order ``entries`` behavior is unchanged.

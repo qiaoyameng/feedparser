@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+An li element from a foreign namespace appears inside rdf:Seq and must not
+be treated as an RDF sequence member.
+-->
+<rdf:RDF
+    xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+    xmlns="http://purl.org/rss/1.0/"
+    xmlns:ex="http://example.com/ns#"
+    xml:base="http://example.org/feed/">
+
+  <channel rdf:about="http://example.org/channel">
+    <title>Channel</title>
+    <items>
+      <rdf:Seq>
+        <rdf:li resource="items/one"/>
+        <ex:li resource="items/two"/>
+        <rdf:li resource="items/three"/>
+      </rdf:Seq>
+    </items>
+  </channel>
+
+  <item rdf:about="items/one"><title>One</title></item>
+  <item rdf:about="items/two"><title>Two</title></item>
+  <item rdf:about="items/three"><title>Three</title></item>
+</rdf:RDF>

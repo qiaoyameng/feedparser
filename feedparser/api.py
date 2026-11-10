@@ -154,6 +154,7 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    rss1_sequence: bool | None = None,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +189,14 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param rss1_sequence:
+        For RSS 1.0 (RDF) feeds only: assemble entries according to each
+        channel's ``rdf:Seq`` instead of the document order of the ``item``
+        elements.  Forward references, items shared by multiple channels,
+        relative ``rdf:about``/``rdf:resource`` URIs (resolved against the
+        in-scope ``xml:base``) and sequence diagnostics are handled
+        explicitly.  Defaults to ``False``, which preserves the historical
+        flat, document-order ``entries`` behavior.
 
     """
 
@@ -230,6 +239,7 @@ def parse(
             resolve_relative_uris=resolve_relative_uris,
             sanitize_html=sanitize_html,
             optimistic_encoding_detection=optimistic_encoding_detection,
+            rss1_sequence=rss1_sequence,
         )
     finally:
         if not hasattr(url_file_stream_or_string, "read"):
@@ -246,6 +256,7 @@ def _parse_file_inplace(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    rss1_sequence: bool | None = None,
 ) -> None:
     # Avoid a cyclic import.
     import feedparser
@@ -256,6 +267,8 @@ def _parse_file_inplace(
         resolve_relative_uris = bool(feedparser.RESOLVE_RELATIVE_URIS)
     if optimistic_encoding_detection is None:
         optimistic_encoding_detection = bool(feedparser.OPTIMISTIC_ENCODING_DETECTION)
+    if rss1_sequence is None:
+        rss1_sequence = bool(feedparser.RSS1_SEQUENCE)
 
     stream_factory = convert_file_to_utf8(
         result["headers"], file, result, optimistic_encoding_detection
@@ -305,6 +318,7 @@ def _parse_file_inplace(
         feed_parser = StrictFeedParser(baseuri, baselang, "utf-8")
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.rss1_sequence = rss1_sequence
         saxparser = xml.sax.make_parser(PREFERRED_XML_PARSERS)
         saxparser.setFeature(xml.sax.handler.feature_namespaces, 1)
         try:
@@ -336,6 +350,7 @@ def _parse_file_inplace(
         feed_parser = LooseFeedParser(baseuri, baselang, "utf-8", entities)
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.rss1_sequence = rss1_sequence
 
         # If an encoding was detected, use it; otherwise, assume utf-8 and do your best.
         # Will raise io.UnsupportedOperation if the underlying file is not seekable.
@@ -368,9 +383,11 @@ def _parse_file_inplace(
             result["bozo_exception"] = e
 
     result["feed"] = feed_parser.feeddata
-    result["entries"] = feed_parser.entries
     result["version"] = result["version"] or feed_parser.version
     if isinstance(feed_parser, JSONParser):
         result["namespaces"] = {}
     else:
         result["namespaces"] = feed_parser.namespaces_in_use
+        if rss1_sequence:
+            feed_parser.finalize_rss1_sequence()
+    result["entries"] = feed_parser.entries

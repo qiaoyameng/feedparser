@@ -54,6 +54,10 @@ class StrictXMLParser:
         if prefix and uri == "http://www.w3.org/1999/xlink":
             self.decls["xmlns:" + prefix] = uri
 
+    def setDocumentLocator(self, locator):
+        # Retained so RSS 1.0 sequence diagnostics can report a line number.
+        self.locator = locator
+
     def startElementNS(self, name, qname, attrs):
         namespace, localname = name
         lowernamespace = str(namespace or "").lower()
