@@ -1,0 +1,32 @@
+<!--
+Description: hierarchical media:group/media:content structure
+Expect:      entries[0]['media_content'][3]['url'] == 'outside.mp4' and len(entries[0]['media_content']) == 4 and entries[0]['title'] == 'Entry title'
+-->
+<rss version="2.0" xmlns:mvideo="http://search.yahoo.com/mrss/" xml:base="http://example.com/feed/">
+  <channel>
+    <item>
+      <title>Entry title</title>
+      <mvideo:group>
+        <mvideo:title type="plain">English group</mvideo:title>
+        <mvideo:description type="plain">English description</mvideo:description>
+        <mvideo:credit role="creator">Group credit</mvideo:credit>
+        <mvideo:rating scheme="urn:simple">adult</mvideo:rating>
+        <mvideo:thumbnail url="group-thumb.jpg" width="100" height="80" />
+        <mvideo:content url="en-high.mp4" type="video/mp4" lang="en" bitrate="1000">
+          <mvideo:title>English high bitrate</mvideo:title>
+          <mvideo:credit role="publisher">Content publisher</mvideo:credit>
+          <mvideo:thumbnail url="en-high-thumb.jpg" />
+        </mvideo:content>
+        <mvideo:content url="en-low.mp4" type="video/mp4" lang="en" bitrate="500">
+          <mvideo:title>English low bitrate</mvideo:title>
+        </mvideo:content>
+      </mvideo:group>
+      <mvideo:group xml:base="fr/">
+        <mvideo:title>French group</mvideo:title>
+        <mvideo:thumbnail url="fr-thumb.jpg" />
+        <mvideo:content url="fr-high.mp4" type="video/mp4" lang="fr" />
+      </mvideo:group>
+      <mvideo:content url="outside.mp4" type="video/mp4" />
+    </item>
+  </channel>
+</rss>

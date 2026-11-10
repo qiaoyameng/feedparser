@@ -49,6 +49,10 @@ SANITIZE_HTML = 1
 # (uses less memory), set this to 1.
 OPTIMISTIC_ENCODING_DETECTION = 1
 
+# If you want feedparser to preserve the hierarchical structure of Media RSS
+# media:group/media:content elements by default, set this to 1.
+HIERARCHICAL_MEDIA = 0
+
 
 __all__ = (
     "parse",

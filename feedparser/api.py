@@ -154,6 +154,7 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    hierarchical_media: bool | None = None,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +189,12 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param hierarchical_media:
+        Should feedparser preserve the hierarchical structure of Media RSS
+        ``media:group`` and ``media:content`` elements?  When enabled each
+        entry exposes ``media_groups`` and ``media_ungrouped_content`` in
+        addition to the flat ``media_content`` fields.  Defaults to ``False``,
+        which keeps the historical flat output unchanged.
 
     """
 
@@ -230,6 +237,7 @@ def parse(
             resolve_relative_uris=resolve_relative_uris,
             sanitize_html=sanitize_html,
             optimistic_encoding_detection=optimistic_encoding_detection,
+            hierarchical_media=hierarchical_media,
         )
     finally:
         if not hasattr(url_file_stream_or_string, "read"):
@@ -246,6 +254,7 @@ def _parse_file_inplace(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    hierarchical_media: bool | None = None,
 ) -> None:
     # Avoid a cyclic import.
     import feedparser
@@ -256,6 +265,10 @@ def _parse_file_inplace(
         resolve_relative_uris = bool(feedparser.RESOLVE_RELATIVE_URIS)
     if optimistic_encoding_detection is None:
         optimistic_encoding_detection = bool(feedparser.OPTIMISTIC_ENCODING_DETECTION)
+    if hierarchical_media is None:
+        hierarchical_media = bool(
+            getattr(feedparser, "HIERARCHICAL_MEDIA", False)
+        )
 
     stream_factory = convert_file_to_utf8(
         result["headers"], file, result, optimistic_encoding_detection
@@ -305,6 +318,7 @@ def _parse_file_inplace(
         feed_parser = StrictFeedParser(baseuri, baselang, "utf-8")
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.hierarchical_media = hierarchical_media
         saxparser = xml.sax.make_parser(PREFERRED_XML_PARSERS)
         saxparser.setFeature(xml.sax.handler.feature_namespaces, 1)
         try:
@@ -336,6 +350,7 @@ def _parse_file_inplace(
         feed_parser = LooseFeedParser(baseuri, baselang, "utf-8", entities)
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.hierarchical_media = hierarchical_media
 
         # If an encoding was detected, use it; otherwise, assume utf-8 and do your best.
         # Will raise io.UnsupportedOperation if the underlying file is not seekable.
