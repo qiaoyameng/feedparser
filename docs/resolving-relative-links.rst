@@ -271,3 +271,14 @@ How to disable relative :abbr:`URI (Uniform Resource Identifier)` resolution
     <p id="anchor1"><a href="#anchor2">skip to anchor 2</a></p>
     <p>Some content</p>
     <p id="anchor2">This is anchor 2</p>
+
+
+Inspecting how a :abbr:`URI (Uniform Resource Identifier)` was resolved
+------------------------------------------------------------------------
+
+To keep the original relative value, the effective base and the resolved
+value for every tracked reference, pass ``track_uri_sources=True`` to
+``feedparser.parse()``.  See :ref:`advanced.uri_sources` for the structure of
+the resulting ``uri_sources`` and ``base_sources`` lists, including the
+precedence of the final :abbr:`HTTP (HyperText Transfer Protocol)`
+:abbr:`URL` and the ``Content-Location`` header.

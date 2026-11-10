@@ -40,6 +40,7 @@ from .parsers.json import JSONParser
 from .parsers.loose import LooseXMLParser
 from .parsers.strict import StrictXMLParser
 from .sanitizer import replace_doctype
+from .uri_sources import URISourceTracker
 from .urls import make_safe_absolute_uri
 from .util import FeedParserDict
 
@@ -154,6 +155,7 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    track_uri_sources: bool = False,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +190,15 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param track_uri_sources:
+        Should feedparser record URI resolution provenance?  When enabled the
+        result gains a ``uri_sources`` list (one record per URI reference in
+        document order) and a ``base_sources`` list describing the
+        ``xml:base`` and HTTP-derived bases in effect.  Each record preserves
+        the original reference, the effective base, and the resolved value.
+        References that cannot be resolved safely keep their original text
+        with a ``reason`` explaining why.  Defaults to ``False``, in which
+        case the result object is unchanged.
 
     """
 
@@ -230,6 +241,7 @@ def parse(
             resolve_relative_uris=resolve_relative_uris,
             sanitize_html=sanitize_html,
             optimistic_encoding_detection=optimistic_encoding_detection,
+            track_uri_sources=track_uri_sources,
         )
     finally:
         if not hasattr(url_file_stream_or_string, "read"):
@@ -246,6 +258,7 @@ def _parse_file_inplace(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    track_uri_sources: bool = False,
 ) -> None:
     # Avoid a cyclic import.
     import feedparser
@@ -291,6 +304,38 @@ def _parse_file_inplace(
         or href
     )
 
+    # Document the precedence used to derive the initial base URI.  The
+    # calculation above tries, in order:
+    #   1. Content-Location resolved against the final HTTP URL (``href``);
+    #   2. Content-Location on its own;
+    #   3. The raw final HTTP URL.
+    # Every HTTP-derived candidate is recorded, and the one that produced the
+    # working base is flagged ``effective`` so the decision is auditable.
+    uri_tracker: URISourceTracker | None = None
+    if track_uri_sources:
+        combined = make_safe_absolute_uri(href, contentloc)
+        cl_only = make_safe_absolute_uri(contentloc)
+        uri_tracker = URISourceTracker(baseuri)
+        if href:
+            # The final HTTP URL only becomes the working base when no
+            # Content-Location header is present.
+            href_effective = not contentloc and bool(href)
+            uri_tracker.add_document_base(
+                href,
+                "HTTP final URL",
+                effective=href_effective,
+            )
+        if contentloc:
+            # Content-Location wins whenever it resolves to a safe absolute
+            # URI, either on its own or against the final HTTP URL.
+            uri_tracker.add_document_base(
+                contentloc,
+                "Content-Location header",
+                effective=bool(combined or cl_only),
+            )
+        if not href and not contentloc:
+            uri_tracker.note_missing_base()
+
     baselang = result["headers"].get("content-language", None)
     if isinstance(baselang, bytes) and baselang is not None:
         baselang = baselang.decode("utf-8", "ignore")
@@ -305,6 +350,7 @@ def _parse_file_inplace(
         feed_parser = StrictFeedParser(baseuri, baselang, "utf-8")
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.uri_tracker = uri_tracker
         saxparser = xml.sax.make_parser(PREFERRED_XML_PARSERS)
         saxparser.setFeature(xml.sax.handler.feature_namespaces, 1)
         try:
@@ -336,6 +382,7 @@ def _parse_file_inplace(
         feed_parser = LooseFeedParser(baseuri, baselang, "utf-8", entities)
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.uri_tracker = uri_tracker
 
         # If an encoding was detected, use it; otherwise, assume utf-8 and do your best.
         # Will raise io.UnsupportedOperation if the underlying file is not seekable.
@@ -374,3 +421,6 @@ def _parse_file_inplace(
         result["namespaces"] = {}
     else:
         result["namespaces"] = feed_parser.namespaces_in_use
+        if uri_tracker is not None:
+            result["uri_sources"] = feed_parser.uri_tracker.uri_sources
+            result["base_sources"] = feed_parser.uri_tracker.base_sources

@@ -200,6 +200,10 @@ class XMLParserMixin(
         self.elementstack = []
         self.basestack = []
         self.langstack = []
+        # Optional URI provenance tracker (see feedparser.uri_sources).
+        # It remains ``None`` unless track_uri_sources=True is requested,
+        # keeping the default result object unchanged.
+        self.uri_tracker = None
         self.svgOK = 0
         self.title_depth = -1
         self.depth = 0
@@ -229,12 +233,23 @@ class XMLParserMixin(
 
         # track xml:base and xml:lang
         attrs_d = dict(attrs)
-        baseuri = attrs_d.get("xml:base", attrs_d.get("base")) or self.baseuri
+        declared_base = attrs_d.get("xml:base", attrs_d.get("base"))
+        baseuri = declared_base or self.baseuri
         if isinstance(baseuri, bytes):
             baseuri = baseuri.decode(self.encoding, "ignore")
         # ensure that self.baseuri is always an absolute URI that
         # uses a whitelisted URI scheme (e.g. not `javascript:`)
-        if self.baseuri:
+        if self.uri_tracker is not None:
+            # The tracker owns the xml:base scope rules and records why a
+            # declaration could or could not be applied.  Its result matches
+            # the legacy calculation below while keeping the provenance.
+            self.uri_tracker.enter_element(
+                declared_base.decode(self.encoding, "ignore")
+                if isinstance(declared_base, bytes)
+                else declared_base
+            )
+            self.baseuri = self.uri_tracker.current_base
+        elif self.baseuri:
             self.baseuri = make_safe_absolute_uri(self.baseuri, baseuri) or self.baseuri
         else:
             self.baseuri = _urljoin(self.baseuri, baseuri)
@@ -354,6 +369,9 @@ class XMLParserMixin(
             self.basestack.pop()
             if self.basestack and self.basestack[-1]:
                 self.baseuri = self.basestack[-1]
+        if self.uri_tracker is not None:
+            self.uri_tracker.exit_element()
+            self.baseuri = self.uri_tracker.current_base
         if self.langstack:
             self.langstack.pop()
             if self.langstack:  # and (self.langstack[-1] is not None):
@@ -461,8 +479,47 @@ class XMLParserMixin(
         else:
             self.namespaces_in_use[prefix or ""] = uri
 
-    def resolve_uri(self, uri):
-        return _urljoin(self.baseuri or "", uri)
+    def resolve_uri(self, uri, location=None):
+        if self.uri_tracker is None or location is None:
+            return _urljoin(self.baseuri or "", uri)
+        return self.uri_tracker.record_join(uri, **location)
+
+    def _uri_location(self, element):
+        """Build the provenance location for an element-text URI."""
+
+        if self.inentry and not self.insource:
+            scope = "entry"
+            entry_index = len(self.entries) - 1
+        elif self.insource:
+            scope = "source"
+            entry_index = len(self.entries) - 1 if self.inentry else None
+        else:
+            scope = "feed"
+            entry_index = None
+        return {
+            "field": element,
+            "scope": scope,
+            "entry_index": entry_index,
+            "tag": element,
+        }
+
+    def _make_html_recorder(self, field, scope, entry_index):
+        """Return a recorder for href/src references inside markup."""
+
+        tracker = self.uri_tracker
+
+        def recorder(original, resolved, tag, attribute):
+            return tracker.record_html(
+                original,
+                resolved,
+                field=field,
+                scope=scope,
+                entry_index=entry_index,
+                tag=tag,
+                attribute=attribute,
+            )
+
+        return recorder
 
     @staticmethod
     def decode_entities(element, data):
@@ -536,7 +593,10 @@ class XMLParserMixin(
         if (element in self.can_be_relative_uri) and output:
             # do not resolve guid elements with isPermalink="false"
             if not element == "id" or self.guidislink:
-                output = self.resolve_uri(output)
+                location = None
+                if self.uri_tracker is not None:
+                    location = self._uri_location(element)
+                output = self.resolve_uri(output, location)
 
         # decode entities within embedded markup
         if not self.contentparams.get("base64", 0):
@@ -568,11 +628,28 @@ class XMLParserMixin(
         # resolve relative URIs within embedded markup
         if is_htmlish and self.resolve_relative_uris:
             if element in self.can_contain_relative_uris:
+                recorder = None
+                if self.uri_tracker is not None:
+                    if self.inentry and not self.insource:
+                        html_scope = "entry"
+                        html_entry_index = len(self.entries) - 1
+                    elif self.insource:
+                        html_scope = "source"
+                        html_entry_index = (
+                            len(self.entries) - 1 if self.inentry else None
+                        )
+                    else:
+                        html_scope = "feed"
+                        html_entry_index = None
+                    recorder = self._make_html_recorder(
+                        element, html_scope, html_entry_index
+                    )
                 output = resolve_relative_uris(
                     output,
                     self.baseuri,
                     self.encoding,
                     self.contentparams.get("type", "text/html"),
+                    recorder=recorder,
                 )
 
         # sanitize embedded markup

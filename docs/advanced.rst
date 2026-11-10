@@ -9,6 +9,7 @@ Advanced Features
     content-normalization
     namespace-handling
     resolving-relative-links
+    uri-sources
     version-detection
     character-encoding
     bozo

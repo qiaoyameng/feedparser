@@ -149,26 +149,38 @@ class RelativeURIResolver(BaseHTMLProcessor):
         ("video", "src"),
     }
 
-    def __init__(self, baseuri, encoding, _type):
+    def __init__(self, baseuri, encoding, _type, recorder=None):
         BaseHTMLProcessor.__init__(self, encoding, _type)
         self.baseuri = baseuri
+        # Optional callable(original, resolved, tag, attribute) -> value
+        self.recorder = recorder
+        self._current_tag = ""
+        self._current_attribute = ""
 
     def resolve_uri(self, uri):
-        return make_safe_absolute_uri(self.baseuri, uri.strip())
+        resolved = make_safe_absolute_uri(self.baseuri, uri.strip())
+        if self.recorder is not None:
+            return self.recorder(
+                uri, resolved, self._current_tag, self._current_attribute
+            )
+        return resolved
 
     def unknown_starttag(self, tag, attrs):
         attrs = self.normalize_attrs(attrs)
-        attrs = [
-            (
-                key,
-                ((tag, key) in self.relative_uris) and self.resolve_uri(value) or value,
-            )
-            for key, value in attrs
-        ]
+        normalized = []
+        for key, value in attrs:
+            if (tag, key) in self.relative_uris:
+                self._current_tag = tag
+                self._current_attribute = key
+                value = self.resolve_uri(value)
+            normalized.append((key, value))
+        attrs = normalized
         super().unknown_starttag(tag, attrs)
 
 
-def resolve_relative_uris(html_source, base_uri, encoding, type_):
-    p = RelativeURIResolver(base_uri, encoding, type_)
+def resolve_relative_uris(
+    html_source, base_uri, encoding, type_, recorder=None
+):
+    p = RelativeURIResolver(base_uri, encoding, type_, recorder)
     p.feed(html_source)
     return p.output()

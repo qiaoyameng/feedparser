@@ -360,7 +360,13 @@ class Namespace:
         context = self._get_context()
         attrs_d = self._enforce_href(attrs_d)
         if "href" in attrs_d:
-            attrs_d["href"] = self.resolve_uri(attrs_d["href"])
+            location = None
+            if self.uri_tracker is not None:
+                location = self._uri_location("links")
+                location["attribute"] = "href"
+            attrs_d["href"] = self.resolve_uri(
+                attrs_d["href"], location
+            )
         if (
             attrs_d.get("rel") == "alternate"
             and self.map_content_type(attrs_d.get("type")) in self.html_types
@@ -455,7 +461,13 @@ class Namespace:
         if attrs_d:
             attrs_d = self._enforce_href(attrs_d)
             if "href" in attrs_d:
-                attrs_d["href"] = self.resolve_uri(attrs_d["href"])
+                location = None
+                if self.uri_tracker is not None:
+                    location = self._uri_location("generator_detail")
+                    location["attribute"] = "href"
+                attrs_d["href"] = self.resolve_uri(
+                    attrs_d["href"], location
+                )
         self._get_context()["generator_detail"] = FeedParserDict(attrs_d)
         self.push("generator", 1)
 
@@ -484,6 +496,14 @@ class Namespace:
     def _start_enclosure(self, attrs_d):
         attrs_d = self._enforce_href(attrs_d)
         context = self._get_context()
+        if "href" in attrs_d:
+            location = None
+            if self.uri_tracker is not None:
+                location = self._uri_location("links")
+                location["attribute"] = "href"
+            attrs_d["href"] = self.resolve_uri(
+                attrs_d["href"], location
+            )
         attrs_d["rel"] = "enclosure"
         context.setdefault("links", []).append(FeedParserDict(attrs_d))
 
@@ -508,6 +528,10 @@ class Namespace:
         self.push_content("content", attrs_d, "text/plain", 1)
         src = attrs_d.get("src")
         if src:
+            if self.uri_tracker is not None:
+                location = self._uri_location("content")
+                location["attribute"] = "src"
+                src = self.resolve_uri(src, location)
             self.contentparams["src"] = src
         self.push("content", 1)
 
