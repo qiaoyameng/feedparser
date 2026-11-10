@@ -27,6 +27,7 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import io
+import tempfile
 import urllib.error
 import urllib.parse
 import xml.sax
@@ -49,6 +50,15 @@ from .util import FeedParserDict
 PREFERRED_XML_PARSERS = ["drv_libxml2"]
 
 _XML_AVAILABLE = True
+
+#: Default maximum number of bytes of a non-seekable input stream
+#: that are staged in memory; larger inputs are rolled over to
+#: a temporary file on disk.
+DEFAULT_STAGING_MEMORY_THRESHOLD = 2**20
+
+#: Maximum number of bytes read from a non-seekable input stream
+#: in a single read() call while staging its content.
+STAGING_READ_CHUNK_LEN = 2**16
 
 SUPPORTED_VERSIONS = {
     "": "unknown",
@@ -74,6 +84,9 @@ SUPPORTED_VERSIONS = {
 def _open_resource(
     url_file_stream_or_string,
     result,
+    *,
+    staging_memory_threshold: int = DEFAULT_STAGING_MEMORY_THRESHOLD,
+    staging_dir: str | None = None,
 ):
     """URL, filename, or string --> stream
 
@@ -99,13 +112,19 @@ def _open_resource(
     # However, to accommodate parse() needing the content twice,
     # the returned file is guaranteed to be seekable.
     # (If the underlying resource is not seekable,
-    # the content is read and wrapped in a io.BytesIO/StringIO.)
+    # the content is staged in a rewindable temporary file
+    # that keeps at most `staging_memory_threshold` bytes in memory
+    # and rolls over to a file in `staging_dir` beyond that.)
 
     if callable(getattr(url_file_stream_or_string, "read", None)):
         if callable(getattr(url_file_stream_or_string, "seekable", None)):
             if url_file_stream_or_string.seekable():
                 return url_file_stream_or_string
-        return _to_in_memory_file(url_file_stream_or_string.read())
+        return _stage_stream(
+            url_file_stream_or_string,
+            staging_memory_threshold,
+            staging_dir,
+        )
 
     looks_like_url = isinstance(
         url_file_stream_or_string, str
@@ -134,6 +153,33 @@ def _open_resource(
     return _to_in_memory_file(url_file_stream_or_string)
 
 
+def _stage_stream(stream, max_in_memory: int, staging_dir: str | None):
+    """Buffer a non-seekable stream into a rewindable staging file.
+
+    The original stream is read exactly once, in bounded chunks
+    (a short read is not treated as EOF), and is never closed.
+    At most `max_in_memory` bytes are kept in memory; anything beyond
+    that is rolled over to a temporary file in `staging_dir`.
+    """
+
+    if isinstance(stream.read(0), str):
+        # Text streams are not staged; read them into memory as before.
+        return io.StringIO(stream.read())
+
+    spool = tempfile.SpooledTemporaryFile(
+        max_size=max_in_memory,
+        mode="w+b",
+        dir=staging_dir,
+    )
+    while True:
+        chunk = stream.read(STAGING_READ_CHUNK_LEN)
+        if not chunk:
+            break
+        spool.write(chunk)
+    spool.seek(0)
+    return spool
+
+
 def _to_in_memory_file(data):
     if isinstance(data, str):
         return io.StringIO(data)
@@ -154,6 +200,8 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    staging_memory_threshold: int | None = None,
+    staging_dir: str | None = None,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +236,16 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param staging_memory_threshold:
+        Maximum number of bytes held in memory when a non-seekable input
+        stream has to be staged for repeated reads (encoding detection,
+        strict/loose parser fallback). Larger inputs are rolled over to
+        a temporary file. Defaults to
+        :data:`feedparser.api.DEFAULT_STAGING_MEMORY_THRESHOLD`.
+    :param staging_dir:
+        Directory for the temporary file used when staged input exceeds
+        ``staging_memory_threshold``. Defaults to the system temporary
+        directory.
 
     """
 
@@ -202,6 +260,10 @@ def parse(
         file = _open_resource(
             url_file_stream_or_string,
             result,
+            staging_memory_threshold=staging_memory_threshold
+            if staging_memory_threshold is not None
+            else DEFAULT_STAGING_MEMORY_THRESHOLD,
+            staging_dir=staging_dir,
         )
     except urllib.error.URLError as error:
         result.update(
@@ -212,18 +274,18 @@ def parse(
         )
         return result
 
-    # at this point, the file is guaranteed to be seekable;
-    # we read 1 byte/character to see if it's empty and return early
-    # (this preserves the behavior in 6.0.8)
-    initial_file_offset = file.tell()
-    if not file.read(1):
-        return result
-    file.seek(initial_file_offset)
-
-    # overwrite existing headers using response_headers
-    result["headers"].update(response_headers or {})
-
     try:
+        # at this point, the file is guaranteed to be seekable;
+        # we read 1 byte/character to see if it's empty and return early
+        # (this preserves the behavior in 6.0.8)
+        initial_file_offset = file.tell()
+        if not file.read(1):
+            return result
+        file.seek(initial_file_offset)
+
+        # overwrite existing headers using response_headers
+        result["headers"].update(response_headers or {})
+
         _parse_file_inplace(
             file,
             result,
@@ -232,8 +294,11 @@ def parse(
             optimistic_encoding_detection=optimistic_encoding_detection,
         )
     finally:
-        if not hasattr(url_file_stream_or_string, "read"):
-            # the file does not come from the user, close it
+        if file is not url_file_stream_or_string:
+            # The file object was created internally (a staged temporary
+            # file, an in-memory buffer, or an opened file path), so it
+            # must be cleaned up no matter how parsing ended.
+            # A stream provided by the caller is never closed.
             file.close()
 
     return result

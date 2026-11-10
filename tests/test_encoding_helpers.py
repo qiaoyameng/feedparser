@@ -49,7 +49,6 @@ def test_prefix_file_wrapper_no_prefix():
 
 
 def test_convert_file_to_utf8_decode_error_fallback():
-    # TODO: Confirm this test is useful. It looks like a tautology.
     data = (
         "abcd😀".encode() * feedparser.encodings.CONVERT_FILE_PREFIX_LEN
         + "abcd😀".encode("utf-32")
@@ -65,7 +64,9 @@ def test_convert_file_to_utf8_decode_error_fallback():
         headers, io.BytesIO(data), actual_result
     )
 
-    assert factory.get_binary_file().read() == expected_output
+    # The content is decoded on the fly, so the converted document
+    # is only available through the text stream.
+    assert factory.get_text_file().read() == expected_output.decode("utf-8")
     assert actual_result["encoding"] == expected_result["encoding"]
     assert isinstance(
         actual_result["bozo_exception"], type(expected_result["bozo_exception"])
