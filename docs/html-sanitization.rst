@@ -815,6 +815,56 @@ Though not recommended, it is possible to disable :program:`Universal Feed Parse
 HTML sanitization by passing ``sanitize_html=False`` to ``feedparser.parse()``.
 When passing this flag you are responsible for manually sanitizing HTML from the feed.
 
+
+Customizing the Sanitization Whitelist
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Different applications may need different sanitization rules. The
+:class:`feedparser.sanitizer.SanitizationPolicy` class holds an immutable
+whitelist that can be passed to :func:`feedparser.parse` via the
+``sanitization_policy`` parameter:
+
+* ``elements`` -- allowed HTML tag names
+* ``attributes`` -- allowed HTML attribute names
+* ``uri_schemes`` -- URI protocols allowed on ``href`` attributes
+  (an empty tuple allows every protocol)
+* ``css_properties`` -- allowed CSS properties in ``style`` attributes
+
+The policy object is frozen and only contains immutable types, so the same
+object may be shared between threads. It is never stored in global state and
+is used for that ``parse()`` call only; concurrent calls, nested
+``parse()`` calls and exceptions cannot leak a custom policy into another
+call. The same policy sanitizes RSS/Atom HTML and XHTML markup as well as
+JSON Feed ``content_html``.
+
+..  sourcecode:: python
+
+    import feedparser
+    from feedparser.sanitizer import SanitizationPolicy
+
+    # Identical to the built-in defaults.
+    default = SanitizationPolicy.default()
+
+    # Tighten a whitelist. Names outside the parent policy raise
+    # ValueError, so a typo cannot silently widen the rules.
+    strict = default.restricted(
+        elements={"a", "p"},
+        css_properties={"color"},
+        uri_schemes=("https",),
+    )
+
+    # Widen a whitelist. Every addition must be named explicitly;
+    # partial data never merges into the other whitelists.
+    permissive = default.expanded(
+        elements={"custom-tag"},
+        uri_schemes=("custom-scheme",),
+    )
+
+    feedparser.parse(data, sanitization_policy=permissive)
+
+Passing ``sanitize_html=False`` always wins: sanitization is skipped
+entirely, regardless of the supplied policy.
+
 ..  seealso::
 
     `How to consume RSS safely <https://web.archive.org/web/20080826033749/http://diveintomark.org/archives/2003/06/12/how_to_consume_rss_safely>`_

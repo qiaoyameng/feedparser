@@ -39,7 +39,7 @@ from .mixin import XMLParserMixin
 from .parsers.json import JSONParser
 from .parsers.loose import LooseXMLParser
 from .parsers.strict import StrictXMLParser
-from .sanitizer import replace_doctype
+from .sanitizer import SanitizationPolicy, replace_doctype
 from .urls import make_safe_absolute_uri
 from .util import FeedParserDict
 
@@ -154,6 +154,7 @@ def parse(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    sanitization_policy: SanitizationPolicy | None = None,
 ) -> FeedParserDict:
     """Parse a feed from a URL, file, stream, or string.
 
@@ -188,6 +189,14 @@ def parse(
         (uses less memory, but the wrong encoding may be detected in rare cases).
         Defaults to the value of
         :data:`feedparser.OPTIMISTIC_ENCODING_DETECTION`, which is ``True``.
+    :param sanitization_policy:
+        An immutable :class:`~feedparser.sanitizer.SanitizationPolicy` that
+        customizes the HTML sanitization whitelist (allowed tags, attributes,
+        URI schemes and CSS properties) for this call only. The policy is not
+        stored globally, so concurrent or nested calls cannot interfere with
+        each other. Defaults to a policy that reproduces the built-in
+        sanitizer behavior. Has no effect when ``sanitize_html=False`` is
+        passed explicitly.
 
     """
 
@@ -230,6 +239,7 @@ def parse(
             resolve_relative_uris=resolve_relative_uris,
             sanitize_html=sanitize_html,
             optimistic_encoding_detection=optimistic_encoding_detection,
+            sanitization_policy=sanitization_policy,
         )
     finally:
         if not hasattr(url_file_stream_or_string, "read"):
@@ -246,6 +256,7 @@ def _parse_file_inplace(
     resolve_relative_uris: bool | None = None,
     sanitize_html: bool | None = None,
     optimistic_encoding_detection: bool | None = None,
+    sanitization_policy: SanitizationPolicy | None = None,
 ) -> None:
     # Avoid a cyclic import.
     import feedparser
@@ -256,6 +267,8 @@ def _parse_file_inplace(
         resolve_relative_uris = bool(feedparser.RESOLVE_RELATIVE_URIS)
     if optimistic_encoding_detection is None:
         optimistic_encoding_detection = bool(feedparser.OPTIMISTIC_ENCODING_DETECTION)
+    if sanitization_policy is None:
+        sanitization_policy = SanitizationPolicy.default()
 
     stream_factory = convert_file_to_utf8(
         result["headers"], file, result, optimistic_encoding_detection
@@ -305,6 +318,7 @@ def _parse_file_inplace(
         feed_parser = StrictFeedParser(baseuri, baselang, "utf-8")
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.sanitization_policy = sanitization_policy
         saxparser = xml.sax.make_parser(PREFERRED_XML_PARSERS)
         saxparser.setFeature(xml.sax.handler.feature_namespaces, 1)
         try:
@@ -336,6 +350,7 @@ def _parse_file_inplace(
         feed_parser = LooseFeedParser(baseuri, baselang, "utf-8", entities)
         feed_parser.resolve_relative_uris = resolve_relative_uris
         feed_parser.sanitize_html = sanitize_html
+        feed_parser.sanitization_policy = sanitization_policy
 
         # If an encoding was detected, use it; otherwise, assume utf-8 and do your best.
         # Will raise io.UnsupportedOperation if the underlying file is not seekable.
@@ -360,7 +375,9 @@ def _parse_file_inplace(
 
     if use_json_parser:
         result["version"] = None
-        feed_parser = JSONParser(baseuri, baselang, "utf-8")
+        feed_parser = JSONParser(
+            baseuri, baselang, "utf-8", policy=sanitization_policy
+        )
         try:
             feed_parser.feed(stream_factory.get_file())
         except Exception as e:

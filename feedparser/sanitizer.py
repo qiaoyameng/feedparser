@@ -28,9 +28,157 @@
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from typing import Collection, FrozenSet
 
 from .html import BaseHTMLProcessor
-from .urls import make_safe_absolute_uri
+from .urls import ACCEPTABLE_URI_SCHEMES, make_safe_absolute_uri
+
+
+@dataclass(frozen=True, slots=True)
+class SanitizationPolicy:
+    """Immutable sanitization rules used for a single ``parse()`` call.
+
+    A policy covers the four parts of the HTML whitelist that tenants may
+    need to tune independently:
+
+    * ``elements``: allowed HTML tag names
+    * ``attributes``: allowed HTML attribute names
+    * ``uri_schemes``: URI protocols allowed on ``href`` attributes
+      (an empty tuple allows every scheme, matching the historical
+      ``feedparser.urls.ACCEPTABLE_URI_SCHEMES = ()`` escape hatch)
+    * ``css_properties``: allowed CSS properties in ``style`` attributes
+
+    Instances are frozen and only contain immutable types, so a single
+    policy object can be shared between threads without synchronization.
+    Policies are never mutated by the parser; each parser builds its own
+    :class:`HTMLSanitizer` from the policy it receives.
+    """
+
+    elements: FrozenSet[str]
+    attributes: FrozenSet[str]
+    uri_schemes: tuple[str, ...]
+    css_properties: FrozenSet[str]
+
+    @classmethod
+    def default(cls) -> SanitizationPolicy:
+        """Build a policy identical to the built-in sanitizer defaults."""
+
+        return cls(
+            elements=frozenset(HTMLSanitizer.acceptable_elements),
+            attributes=frozenset(HTMLSanitizer.acceptable_attributes),
+            uri_schemes=tuple(ACCEPTABLE_URI_SCHEMES),
+            css_properties=frozenset(HTMLSanitizer.acceptable_css_properties),
+        )
+
+    def restricted(
+        self,
+        *,
+        elements: Collection[str] | None = None,
+        attributes: Collection[str] | None = None,
+        css_properties: Collection[str] | None = None,
+        uri_schemes: Collection[str] | None = None,
+    ) -> SanitizationPolicy:
+        """Return a policy that only tightens the current whitelist.
+
+        Each argument replaces the corresponding whitelist with an
+        intersection against the policy being derived from, so values
+        outside the current policy can never widen the whitelist.
+        Unknown names raise ``ValueError`` so typos fail loudly instead
+        of silently changing nothing.
+        """
+
+        if elements is not None:
+            requested = frozenset(elements)
+            unknown = requested - self.elements
+            if unknown:
+                raise ValueError(
+                    "Cannot restrict with elements not allowed by the "
+                    f"parent policy: {sorted(unknown)}"
+                )
+            new_elements = requested
+        else:
+            new_elements = self.elements
+
+        if attributes is not None:
+            requested = frozenset(attributes)
+            unknown = requested - self.attributes
+            if unknown:
+                raise ValueError(
+                    "Cannot restrict with attributes not allowed by the "
+                    f"parent policy: {sorted(unknown)}"
+                )
+            new_attributes = requested
+        else:
+            new_attributes = self.attributes
+
+        if css_properties is not None:
+            requested = frozenset(css_properties)
+            unknown = requested - self.css_properties
+            if unknown:
+                raise ValueError(
+                    "Cannot restrict with CSS properties not allowed by the "
+                    f"parent policy: {sorted(unknown)}"
+                )
+            new_css_properties = requested
+        else:
+            new_css_properties = self.css_properties
+
+        if uri_schemes is not None:
+            requested = tuple(uri_schemes)
+            if not requested:
+                raise ValueError(
+                    "Cannot restrict URI schemes to an empty tuple: an empty "
+                    "tuple means 'allow all', which would widen the policy"
+                )
+            # An empty parent tuple is the documented "allow all" escape
+            # hatch, so there is nothing to intersect against.
+            if self.uri_schemes:
+                unknown = set(requested) - set(self.uri_schemes)
+                if unknown:
+                    raise ValueError(
+                        "Cannot restrict with URI schemes not allowed by the "
+                        f"parent policy: {sorted(unknown)}"
+                    )
+            new_uri_schemes = requested
+        else:
+            new_uri_schemes = self.uri_schemes
+
+        return SanitizationPolicy(
+            elements=new_elements,
+            attributes=new_attributes,
+            uri_schemes=new_uri_schemes,
+            css_properties=new_css_properties,
+        )
+
+    def expanded(
+        self,
+        *,
+        elements: Collection[str] = (),
+        attributes: Collection[str] = (),
+        css_properties: Collection[str] = (),
+        uri_schemes: Collection[str] = (),
+    ) -> SanitizationPolicy:
+        """Return a policy with additional whitelisted names.
+
+        Widening the whitelist is always explicit: callers must name every
+        element, attribute, CSS property or URI scheme they want to add.
+        Nothing is ever merged implicitly, so passing partial data cannot
+        accidentally open a hole in another whitelist.
+        """
+
+        return SanitizationPolicy(
+            elements=self.elements | frozenset(elements),
+            attributes=self.attributes | frozenset(attributes),
+            # An empty tuple is the documented "allow all" escape hatch and
+            # must stay permissive instead of collapsing into a whitelist.
+            uri_schemes=(
+                ()
+                if not self.uri_schemes
+                else self.uri_schemes + tuple(uri_schemes)
+            ),
+            css_properties=self.css_properties | frozenset(css_properties),
+        )
 
 
 class HTMLSanitizer(BaseHTMLProcessor):
@@ -736,8 +884,22 @@ class HTMLSanitizer(BaseHTMLProcessor):
         "stroke-width",
     }
 
-    def __init__(self, encoding=None, _type="application/xhtml+xml"):
+    def __init__(
+        self,
+        encoding=None,
+        _type="application/xhtml+xml",
+        policy: SanitizationPolicy | None = None,
+    ):
         super().__init__(encoding, _type)
+
+        if policy is None:
+            policy = SanitizationPolicy.default()
+        self.policy = policy
+        # Per-instance copies keep the class attributes as the documented
+        # defaults while ensuring this parser never consults global state.
+        self.acceptable_elements = policy.elements
+        self.acceptable_attributes = policy.attributes
+        self.acceptable_css_properties = policy.css_properties
 
         self.unacceptablestack = 0
         self.mathmlOK = 0
@@ -811,7 +973,9 @@ class HTMLSanitizer(BaseHTMLProcessor):
                 key = keymap.get(key, key)
                 # make sure the uri uses an acceptable uri scheme
                 if key == "href":
-                    value = make_safe_absolute_uri(value)
+                    value = make_safe_absolute_uri(
+                        value, acceptable_schemes=self.policy.uri_schemes
+                    )
                 clean_attrs.append((key, value))
         super().unknown_starttag(tag, clean_attrs)
 
@@ -893,8 +1057,15 @@ class HTMLSanitizer(BaseHTMLProcessor):
         return len(self.rawdata)
 
 
-def sanitize_html(html_source, encoding, _type):
-    p = HTMLSanitizer(encoding, _type)
+def sanitize_html(
+    html_source,
+    encoding,
+    _type,
+    policy: SanitizationPolicy | None = None,
+):
+    if policy is None:
+        policy = SanitizationPolicy.default()
+    p = HTMLSanitizer(encoding, _type, policy)
     html_source = html_source.replace("<![CDATA[", "&lt;![CDATA[")
     p.feed(html_source)
     data = p.output()

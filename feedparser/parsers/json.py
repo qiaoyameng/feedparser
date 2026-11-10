@@ -28,7 +28,7 @@
 import json
 
 from ..datetimes import _parse_date
-from ..sanitizer import sanitize_html
+from ..sanitizer import SanitizationPolicy, sanitize_html
 from ..util import FeedParserDict
 
 
@@ -51,10 +51,19 @@ class JSONParser:
         ("external_url", "source"),
     )
 
-    def __init__(self, baseuri=None, baselang=None, encoding=None):
+    def __init__(
+        self,
+        baseuri=None,
+        baselang=None,
+        encoding=None,
+        policy: SanitizationPolicy | None = None,
+    ):
         self.baseuri = baseuri or ""
         self.lang = baselang or None
         self.encoding = encoding or "utf-8"  # character encoding
+        if policy is None:
+            policy = SanitizationPolicy.default()
+        self.sanitization_policy = policy
 
         self.version = None
         self.feeddata = FeedParserDict()
@@ -92,7 +101,10 @@ class JSONParser:
         elif "content_html" in e:
             entry["content"] = c = FeedParserDict()
             c["value"] = sanitize_html(
-                e["content_html"], self.encoding, "application/json"
+                e["content_html"],
+                self.encoding,
+                "application/json",
+                self.sanitization_policy,
             )
             c["type"] = "html"
 

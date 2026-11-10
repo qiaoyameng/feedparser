@@ -96,9 +96,13 @@ def _urljoin(base, uri):
     return uri
 
 
-def make_safe_absolute_uri(base, rel=None):
-    # bail if ACCEPTABLE_URI_SCHEMES is empty
-    if not ACCEPTABLE_URI_SCHEMES:
+def make_safe_absolute_uri(base, rel=None, acceptable_schemes=None):
+    # When no per-call scheme list is supplied, fall back to the module-level
+    # default so existing callers and monkeypatch-based tests keep working.
+    if acceptable_schemes is None:
+        acceptable_schemes = ACCEPTABLE_URI_SCHEMES
+    # bail if the acceptable scheme list is empty
+    if not acceptable_schemes:
         return _urljoin(base, rel or "")
     if not base:
         return rel or ""
@@ -107,11 +111,11 @@ def make_safe_absolute_uri(base, rel=None):
             scheme = urllib.parse.urlparse(base)[0]
         except ValueError:
             return ""
-        if not scheme or scheme in ACCEPTABLE_URI_SCHEMES:
+        if not scheme or scheme in acceptable_schemes:
             return base
         return ""
     uri = _urljoin(base, rel)
-    if uri.strip().split(":", 1)[0] not in ACCEPTABLE_URI_SCHEMES:
+    if uri.strip().split(":", 1)[0] not in acceptable_schemes:
         return ""
     return uri
 

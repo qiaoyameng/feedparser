@@ -34,7 +34,7 @@ import xml.sax.saxutils
 
 from .html import _cp1252
 from .namespaces import _base, cc, dc, georss, itunes, mediarss, psc
-from .sanitizer import HTMLSanitizer, sanitize_html
+from .sanitizer import HTMLSanitizer, SanitizationPolicy, sanitize_html
 from .urls import _urljoin, make_safe_absolute_uri, resolve_relative_uris
 from .util import FeedParserDict
 
@@ -179,6 +179,7 @@ class XMLParserMixin(
         self.namespaces_in_use = {}  # dictionary of namespaces defined by the feed
         self.resolve_relative_uris = False
         self.sanitize_html = False
+        self.sanitization_policy = SanitizationPolicy.default()
 
         # the following are used internally to track state;
         # this is really out of control and should be refactored
@@ -579,7 +580,10 @@ class XMLParserMixin(
         if is_htmlish and self.sanitize_html:
             if element in self.can_contain_dangerous_markup:
                 output = sanitize_html(
-                    output, self.encoding, self.contentparams.get("type", "text/html")
+                    output,
+                    self.encoding,
+                    self.contentparams.get("type", "text/html"),
+                    self.sanitization_policy,
                 )
 
         if self.encoding and isinstance(output, bytes):
