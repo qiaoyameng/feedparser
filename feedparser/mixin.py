@@ -124,6 +124,7 @@ class XMLParserMixin(
         "http://www.w3.org/1999/xlink": "xlink",
         "http://www.w3.org/XML/1998/namespace": "xml",
         "http://podlove.org/simple-chapters": "psc",
+        "http://purl.org/atompub/tombstones/1.0": "at",
     }
     _matchnamespaces: dict[str, str] = {}
 
@@ -175,6 +176,9 @@ class XMLParserMixin(
                 self._matchnamespaces[k.lower()] = v
         self.feeddata = FeedParserDict()  # feed-level data
         self.entries = []  # list of entry-level data
+        self.tombstones = []  # list of atom tombstone (deleted-entry) data
+        self.tombstone_diagnostics = []  # tombstones that failed validation
+        self._tombstone_stack = []  # tombstones (and child elements) being parsed
         self.version = ""  # feed type/version, see SUPPORTED_VERSIONS
         self.namespaces_in_use = {}  # dictionary of namespaces defined by the feed
         self.resolve_relative_uris = False
@@ -302,7 +306,7 @@ class XMLParserMixin(
             self.inimage = 0
 
         # call special handler (if defined) or default handler
-        methodname = "_start_" + prefix + suffix
+        methodname = "_start_" + prefix + suffix.replace("-", "_")
         try:
             method = getattr(self, methodname)
             return method(attrs_d)
@@ -330,7 +334,7 @@ class XMLParserMixin(
             self.svgOK -= 1
 
         # call special handler (if defined) or default handler
-        methodname = "_end_" + prefix + suffix
+        methodname = "_end_" + prefix + suffix.replace("-", "_")
         try:
             if self.svgOK:
                 raise AttributeError()
@@ -763,6 +767,8 @@ class XMLParserMixin(
             context = self.feeddata["textinput"]
         elif self.inentry:
             context = self.entries[-1]
+        elif self._tombstone_stack:
+            context = self._tombstone_stack[-1]
         else:
             context = self.feeddata
         return context

@@ -273,6 +273,58 @@ class Namespace:
 
     _end_entry = _end_item
 
+    def _start_at_deleted_entry(self, attrs_d):
+        tombstone = FeedParserDict()
+        ref = attrs_d.get("ref")
+        if ref:
+            tombstone["ref"] = ref
+        when = attrs_d.get("when")
+        if when is not None:
+            # Keep the original text even if it cannot be parsed.
+            tombstone["when"] = when
+            tombstone["when_parsed"] = _parse_date(when)
+        self._tombstone_stack.append(tombstone)
+
+    def _end_at_deleted_entry(self):
+        if not self._tombstone_stack:
+            return
+        tombstone = self._tombstone_stack.pop()
+        problems = []
+        if not tombstone.get("ref"):
+            problems.append("missing ref")
+        when = tombstone.get("when")
+        if when is None:
+            problems.append("missing when")
+        elif tombstone.get("when_parsed") is None:
+            problems.append("invalid when")
+        if problems:
+            # A tombstone that cannot identify its target or its deletion
+            # time must not become a deletion; keep it as a diagnostic.
+            tombstone["problems"] = problems
+            self.tombstone_diagnostics.append(tombstone)
+        else:
+            self.tombstones.append(tombstone)
+
+    def _start_at_by(self, attrs_d):
+        self._tombstone_stack.append(FeedParserDict())
+        self.inauthor += 1
+
+    def _end_at_by(self):
+        if not self._tombstone_stack:
+            return
+        by = self._tombstone_stack.pop()
+        self.inauthor -= 1
+        if self._tombstone_stack:
+            detail = by.get("author_detail")
+            if detail:
+                self._tombstone_stack[-1]["by"] = detail
+
+    def _start_at_comment(self, attrs_d):
+        self.push_content("comment", attrs_d, "text/plain", 1)
+
+    def _end_at_comment(self):
+        self.pop_content("comment")
+
     def _start_language(self, attrs_d):
         self.push("language", 1)
 

@@ -196,6 +196,8 @@ def parse(
         entries=[],
         feed=FeedParserDict(),
         headers={},
+        tombstones=[],
+        tombstone_diagnostics=[],
     )
 
     try:
@@ -369,6 +371,8 @@ def _parse_file_inplace(
 
     result["feed"] = feed_parser.feeddata
     result["entries"] = feed_parser.entries
+    result["tombstones"] = getattr(feed_parser, "tombstones", [])
+    result["tombstone_diagnostics"] = getattr(feed_parser, "tombstone_diagnostics", [])
     result["version"] = result["version"] or feed_parser.version
     if isinstance(feed_parser, JSONParser):
         result["namespaces"] = {}

@@ -8,6 +8,7 @@ Advanced Features
     html-sanitization
     content-normalization
     namespace-handling
+    atom-tombstones
     resolving-relative-links
     version-detection
     character-encoding

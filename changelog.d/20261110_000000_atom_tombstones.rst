@@ -1,0 +1,12 @@
+Added
+-----
+
+*   Recognize Atom tombstones (``at:deleted-entry``, matched by namespace
+    URI) and expose them as ``result.tombstones``; tombstones with a missing
+    ``ref`` or an unparseable ``when`` are reported in
+    ``result.tombstone_diagnostics`` instead of becoming deletions.
+
+*   Add ``feedparser.apply_batch()``, a standalone incremental merge helper
+    that combines normal entries and tombstones into a caller-owned state
+    mapping using entry ID as identity and ``updated``/``when`` as event
+    times, reporting same-time content conflicts.

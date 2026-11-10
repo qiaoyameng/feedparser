@@ -34,6 +34,7 @@ from .exceptions import (
     NonXMLContentType,
     UndeclaredNamespace,
 )
+from .tombstones import MergeConflict, apply_batch
 from .util import FeedParserDict
 
 # If you want feedparser to automatically resolve all relative URIs, set this
@@ -53,6 +54,8 @@ OPTIMISTIC_ENCODING_DETECTION = 1
 __all__ = (
     "parse",
     "registerDateHandler",
+    "apply_batch",
+    "MergeConflict",
     "FeedParserDict",
     "FeedparserError",
     "CharacterEncodingOverride",
