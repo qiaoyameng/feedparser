@@ -1,0 +1,17 @@
+<!--
+Description: normalized GML LineString inverse projected from EPSG:3857
+Expect:      entries[0]['normalized_geometry']['type'] == 'LineString' and abs(entries[0]['normalized_geometry']['coordinates'][0][0] - 31.1732) < 1e-06 and abs(entries[0]['normalized_geometry']['coordinates'][0][1] - 36.9382) < 1e-06 and abs(entries[0]['normalized_geometry']['coordinates'][1][0] - 31.0) < 1e-06 and abs(entries[0]['normalized_geometry']['coordinates'][1][1] - 36.5) < 1e-06 and entries[0]['normalized_geometry']['transformation'] == 'web-mercator-inverse'
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  xmlns:gml="http://www.opengis.net/gml"
+  >
+  <entry>
+    <georss:where>
+      <gml:LineString srsName="EPSG:3857">
+        <gml:posList>3470184.75 4430496.16 3450904.21 4369640.51</gml:posList>
+      </gml:LineString>
+    </georss:where>
+  </entry>
+</feed>

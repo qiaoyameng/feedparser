@@ -1,0 +1,12 @@
+<!--
+Description: point with a non-finite coordinate is rejected
+Expect:      entries[0]['normalized_geometry']['converted'] == False and entries[0]['normalized_geometry']['coordinates'] is None and entries[0]['normalized_geometry']['error'] == 'non-finite-coordinate'
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  >
+  <entry>
+    <georss:point>inf 31.1732</georss:point>
+  </entry>
+</feed>

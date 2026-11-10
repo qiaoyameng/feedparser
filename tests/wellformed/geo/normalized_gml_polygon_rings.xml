@@ -1,0 +1,26 @@
+<!--
+Description: GML polygon exterior and interior rings are kept as distinct rings
+Expect:      len(entries[0]['where']['coordinates']) == 2 and len(entries[0]['normalized_geometry']['coordinates']) == 2 and entries[0]['normalized_geometry']['coordinates'][0][0] == (45.0, 45.0) and entries[0]['normalized_geometry']['coordinates'][0][-1] == (45.0, 45.0) and entries[0]['normalized_geometry']['coordinates'][1][0] == (45.1, 45.1) and entries[0]['normalized_geometry']['coordinates'][1][-1] == (45.1, 45.1)
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  xmlns:gml="http://www.opengis.net/gml"
+  >
+  <entry>
+    <georss:where>
+      <gml:Polygon>
+        <gml:exterior>
+          <gml:LinearRing>
+            <gml:posList>45 45 45 46 46 46 46 45 45 45</gml:posList>
+          </gml:LinearRing>
+        </gml:exterior>
+        <gml:interior>
+          <gml:LinearRing>
+            <gml:posList>45.1 45.1 45.1 45.2 45.2 45.2 45.2 45.1 45.1 45.1</gml:posList>
+          </gml:LinearRing>
+        </gml:interior>
+      </gml:Polygon>
+    </georss:where>
+  </entry>
+</feed>

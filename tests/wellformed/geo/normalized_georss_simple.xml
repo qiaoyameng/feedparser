@@ -1,0 +1,21 @@
+<!--
+Description: normalized geometry for GeoRSS Simple point, line, polygon, box
+Expect:      entries[0]['normalized_geometry']['coordinates'] == (31.1732, 36.9382) and entries[0]['normalized_geometry']['crs'] == 'OGC:CRS84' and entries[0]['normalized_geometry']['source_crs'] == 'EPSG:4326' and entries[0]['normalized_geometry']['axis_order'] == 'lat_lon' and entries[0]['normalized_geometry']['transformation'] == 'axis-reorder' and entries[0]['normalized_geometry']['converted'] and entries[0]['where']['coordinates'] == (31.1732, 36.9382) and entries[1]['normalized_geometry']['type'] == 'LineString' and entries[1]['normalized_geometry']['coordinates'][0] == (52.566592, 33.338611) and entries[2]['normalized_geometry']['type'] == 'Polygon' and entries[2]['normalized_geometry']['coordinates'][0][0] == (52.566592, 33.338611) and entries[2]['normalized_geometry']['coordinates'][0][-1] == (52.566592, 33.338611) and entries[3]['normalized_geometry']['type'] == 'Box' and entries[3]['normalized_geometry']['coordinates'] == ((52.566592, 33.338611), (52.527238, 32.537546))
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  >
+  <entry>
+    <georss:point>36.9382 31.1732</georss:point>
+  </entry>
+  <entry>
+    <georss:line>33.338611 52.566592 32.537546 52.527238</georss:line>
+  </entry>
+  <entry>
+    <georss:polygon>33.338611 52.566592 32.537546 52.527238 31.744196 52.409555 33.338611 52.566592</georss:polygon>
+  </entry>
+  <entry>
+    <georss:box>33.338611 52.566592 32.537546 52.527238</georss:box>
+  </entry>
+</feed>

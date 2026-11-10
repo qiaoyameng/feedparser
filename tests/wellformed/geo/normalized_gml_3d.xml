@@ -1,0 +1,24 @@
+<!--
+Description: normalized GML point keeps the third dimension
+Expect:      entries[0]['normalized_geometry']['coordinates'] == (-156.2342, 42.3453, 45.0) and entries[0]['normalized_geometry']['srs_dimension'] == 3 and entries[0]['normalized_geometry']['converted'] and abs(entries[1]['normalized_geometry']['coordinates'][0] - 31.1732) < 1e-06 and abs(entries[1]['normalized_geometry']['coordinates'][1] - 36.9382) < 1e-06 and entries[1]['normalized_geometry']['coordinates'][2] == 15.0
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  xmlns:gml="http://www.opengis.net/gml"
+  >
+  <entry>
+    <georss:where>
+      <gml:Point srsName="EPSG:4326" srsDimension="3">
+        <gml:pos>42.3453 -156.2342 45</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+  <entry>
+    <georss:where srsName="EPSG:3857" srsDimension="3">
+      <gml:Point>
+        <gml:pos>3470184.75 4430496.16 15</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+</feed>

@@ -1,0 +1,41 @@
+<!--
+Description: srsName inheritance, local override, and no state leak across entries
+Expect:      entries[0]['normalized_geometry']['transformation'] == 'web-mercator-inverse' and abs(entries[0]['normalized_geometry']['coordinates'][0] - 31.1732) < 1e-06 and entries[1]['normalized_geometry']['transformation'] == 'web-mercator-inverse' and entries[2]['normalized_geometry']['transformation'] == 'web-mercator-inverse' and entries[3]['normalized_geometry']['source_crs'] == 'EPSG:4326' and entries[3]['normalized_geometry']['coordinates'] == (31.1732, 36.9382) and entries[4]['normalized_geometry']['source_crs'] == 'EPSG:4326' and entries[4]['normalized_geometry']['axis_order'] == 'lat_lon' and entries[4]['normalized_geometry']['coordinates'] == (31.1732, 36.9382)
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  xmlns:gml="http://www.opengis.net/gml"
+  >
+  <entry>
+    <georss:where srsName="EPSG:3857">
+      <gml:Point>
+        <gml:pos>3470184.75 4430496.16</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+  <entry>
+    <georss:where srsName="EPSG:4326">
+      <gml:Point srsName="EPSG:3857">
+        <gml:pos>3470184.75 4430496.16</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+  <entry>
+    <georss:where>
+      <gml:Point srsName="EPSG:4326">
+        <gml:pos srsName="EPSG:3857">3470184.75 4430496.16</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+  <entry>
+    <georss:point>36.9382 31.1732</georss:point>
+  </entry>
+  <entry>
+    <georss:where>
+      <gml:Point>
+        <gml:pos>36.9382 31.1732</gml:pos>
+      </gml:Point>
+    </georss:where>
+  </entry>
+</feed>

@@ -1,0 +1,12 @@
+<!--
+Description: line with an incomplete trailing coordinate group is rejected
+Expect:      entries[0]['normalized_geometry']['converted'] == False and entries[0]['normalized_geometry']['coordinates'] is None and entries[0]['normalized_geometry']['error'] == 'incomplete-coordinate-group'
+-->
+<feed
+  xmlns="http://www.w3.org/2005/Atom"
+  xmlns:georss="http://www.georss.org/georss"
+  >
+  <entry>
+    <georss:line>33.338611 52.566592 32.537546</georss:line>
+  </entry>
+</feed>
